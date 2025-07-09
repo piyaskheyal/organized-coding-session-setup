@@ -8,11 +8,27 @@ MAX_PORT=9000  # Safety cap for port scanning
 
 mkdir -p "$BASE_DIR"
 
-echo "🛠 Setting up $STUDENT_COUNT student containers..."
+echo -e "🛠 Setting up $STUDENT_COUNT student containers...\n"
 
 i=1
 port=$START_PORT
 success_count=0
+
+PASSWORD_FILE=""
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --password-file)
+            PASSWORD_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "❌ Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
 
 while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
     # Check if port is available
@@ -26,8 +42,16 @@ while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
     CONTAINER_NAME="code-$STUDENT_NAME"
     STUDENT_DIR="$BASE_DIR/$STUDENT_NAME"
 
-    # Generate a random 10-character password
-    PASSWORD=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
+    if [ -n "$PASSWORD_FILE" ] && [ -f "$PASSWORD_FILE" ]; then
+        PASSWORD=$(sed -n "${i}p" "$PASSWORD_FILE")
+        if [ -z "$PASSWORD" ]; then
+            echo "⚠️ No password found for $STUDENT_NAME in $PASSWORD_FILE. Generating random one."
+            PASSWORD=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
+        fi
+    else
+        # Fallback to random password
+        PASSWORD=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
+    fi
 
     echo "🚀 Setting up $STUDENT_NAME on port $port"
 
@@ -42,7 +66,7 @@ while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
         "$IMAGE"
 
     if [ $? -eq 0 ]; then
-        echo "$STUDENT_NAME | Port: $port | Password: $PASSWORD"
+        echo -e "$STUDENT_NAME | Port: $port | Password: $PASSWORD\n"
         i=$((i + 1))
         success_count=$((success_count + 1))
     else
