@@ -2,25 +2,20 @@
 
 BASE_DIR="/home/kheyal/dev/organized-coding-session-setup/students"
 START_PORT=8081
-STUDENT_COUNT=2
 IMAGE="rsr-code-server:cpp"
 MAX_PORT=9000  # Safety cap for port scanning
+STUDENT_NUM=10
 
 mkdir -p "$BASE_DIR"
 
-echo -e "🛠 Setting up $STUDENT_COUNT student containers...\n"
+AUTH_FILE=""
+STUDENTS=()
 
-i=1
-port=$START_PORT
-success_count=0
-
-PASSWORD_FILE=""
-
-# Parse arguments
+# --- Parse arguments ---
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --password-file)
-            PASSWORD_FILE="$2"
+        --auth-file)
+            AUTH_FILE="$2"
             shift 2
             ;;
         *)
@@ -30,32 +25,49 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
-    # Check if port is available
-    if ss -tuln | grep -q ":$port "; then
-        echo "⚠️  Port $port is in use. Skipping..."
-        port=$((port + 1))
-        continue
+echo -e "🛠 Starting student container setup...\n"
+
+i=1
+port=$START_PORT
+success_count=0
+
+# --- If auth file exists, load names/passwords ---
+if [[ -n "$AUTH_FILE" && -f "$AUTH_FILE" ]]; then
+    mapfile -t STUDENTS < <(grep -v '^\s*$' "$AUTH_FILE")  # remove empty lines
+else
+    # Generate STUDENT_NUM students with random passwords
+    for ((j=1; j<=STUDENT_NUM; j++)); do
+        name=$(printf "student%02d" "$j")
+        password=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
+        STUDENTS+=("$name,$password")
+    done
+fi
+
+
+for entry in "${STUDENTS[@]}"; do
+    STUDENT_NAME=$(echo "$entry" | cut -d',' -f1)
+    PASSWORD=$(echo "$entry" | cut -d',' -f2)
+
+    # Find an available port
+    while [ $port -lt $MAX_PORT ]; do
+        if ss -tuln | grep -q ":$port "; then
+            echo "⚠️  Port $port is in use. Skipping..."
+            port=$((port + 1))
+        else
+            break
+        fi
+    done
+
+    if [ $port -ge $MAX_PORT ]; then
+        echo "❌ No available ports left under $MAX_PORT"
+        break
     fi
 
-    STUDENT_NAME=$(printf "student%02d" "$i")
     CONTAINER_NAME="code-$STUDENT_NAME"
     STUDENT_DIR="$BASE_DIR/$STUDENT_NAME"
-
-    if [ -n "$PASSWORD_FILE" ] && [ -f "$PASSWORD_FILE" ]; then
-        PASSWORD=$(sed -n "${i}p" "$PASSWORD_FILE")
-        if [ -z "$PASSWORD" ]; then
-            echo "⚠️ No password found for $STUDENT_NAME in $PASSWORD_FILE. Generating random one."
-            PASSWORD=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
-        fi
-    else
-        # Fallback to random password
-        PASSWORD=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c10)
-    fi
+    mkdir -p "$STUDENT_DIR"
 
     echo "🚀 Setting up $STUDENT_NAME on port $port"
-
-    mkdir -p "$STUDENT_DIR"
 
     docker run -d \
         --name "$CONTAINER_NAME" \
@@ -67,7 +79,6 @@ while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
 
     if [ $? -eq 0 ]; then
         echo -e "$STUDENT_NAME | Port: $port | Password: $PASSWORD\n"
-        i=$((i + 1))
         success_count=$((success_count + 1))
     else
         echo "❌ Failed to start container for $STUDENT_NAME on port $port"
@@ -76,10 +87,5 @@ while [ $success_count -lt $STUDENT_COUNT ] && [ $port -lt $MAX_PORT ]; do
     port=$((port + 1))
 done
 
-if [ $success_count -lt $STUDENT_COUNT ]; then
-    echo "⚠️ Only $success_count out of $STUDENT_COUNT containers started. Some ports may be blocked or failed."
-else
-    echo "✅ All $STUDENT_COUNT student containers have been set up."
-fi
-
-echo "📝 You can access them at http://<your-local-IP>:PORT"
+echo "✅ $success_count student container(s) have been set up."
+echo "📝 Access them at: http://<your-local-IP>:PORT"
