@@ -1,10 +1,10 @@
 #!/bin/bash
 
 BASE_DIR="/home/kheyal/dev/organized-coding-session-setup/students"
-START_PORT=8081
+START_PORT=50001
 IMAGE="rsr-code-server:cpp"
-MAX_PORT=9000  # Safety cap for port scanning
-STUDENT_NUM=10
+MAX_PORT=50100  # Safety cap for port scanning
+STUDENT_NUM=60
 
 mkdir -p "$BASE_DIR"
 
