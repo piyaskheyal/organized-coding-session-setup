@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE_DIR="$HOME/dev/students"
+BASE_DIR="/home/kheyal/dev/organized-coding-session-setup/students"
 START_PORT=8081
 STUDENT_COUNT=2
 IMAGE="rsr-code-server:cpp"
